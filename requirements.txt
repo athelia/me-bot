@@ -41,6 +41,7 @@ langchain==0.3.14
 langchain-chroma==0.2.2
 langchain-community==0.3.14
 langchain-core==0.3.63
+langchain-ollama==0.3.3
 langchain-openai==0.3.6
 langchain-text-splitters==0.3.8
 langsmith==0.2.11

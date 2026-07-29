@@ -219,3 +219,4 @@ __marimo__/
 
 # Local project data (PDFs, vector DB, etc.)
 data/
+output/
