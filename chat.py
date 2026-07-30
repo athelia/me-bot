@@ -1,25 +1,29 @@
-# chat.py
 import os
+
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema.runnable import RunnablePassthrough
-from langchain.schema.output_parser import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 from rich.console import Console
 from rich.markdown import Markdown
 
 load_dotenv()
 
-# Configuration
-CHROMA_DIR = "chroma_db"
-COLLECTION_NAME = "rag_chatbot"
+CHROMA_DIR = "data/chroma"
+COLLECTION_NAME = "me-bot"
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b")
 TOP_K = 5
+SHOW_SOURCES = os.getenv("SHOW_SOURCES", "").lower() in {"1", "true", "yes"}
 
 console = Console()
 
-def get_vector_store():
-    """Connect to existing ChromaDB vector store."""
+
+def get_vector_store() -> Chroma:
+    """Connect to the existing ChromaDB vector store."""
     embeddings = OllamaEmbeddings(
         model=EMBED_MODEL,
         base_url=OLLAMA_BASE_URL,
@@ -27,61 +31,74 @@ def get_vector_store():
     return Chroma(
         collection_name=COLLECTION_NAME,
         persist_directory=CHROMA_DIR,
-        embedding_function=embeddings
+        embedding_function=embeddings,
     )
 
-def format_docs(docs):
+
+def format_docs(docs) -> str:
     """Format retrieved documents into a single context string."""
+    seen = set()
     formatted = []
-    for i, doc in enumerate(docs, 1):
-        source = doc.metadata.get("source", "Unknown")
-        page = doc.metadata.get("page", "N/A")
-        formatted.append(
-            f"[Source {i}: {source}, Page {page}]\n{doc.page_content}"
-        )
+    for doc in docs:
+        content = doc.page_content.strip()
+        if not content or content in seen:
+            continue
+        seen.add(content)
+        formatted.append(content)
     return "\n\n---\n\n".join(formatted)
 
-# System prompt with retrieval augmented generation instructions
+
 RAG_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", """You are a helpful assistant that answers questions
-based on the provided context. Follow these rules strictly:
+    ("system", """You are spacepiratemog in a Discord chat. Reply as this person, not as an AI assistant.
 
-1. Only answer based on the provided context
-2. If the context does not contain enough information, say so
-3. Cite your sources using [Source N] notation
-4. Be concise but thorough
-5. If asked about something outside the context, explain that
-   your knowledge is limited to the provided documents
+Use ONLY the past messages below as your voice and knowledge. Do not invent facts, people, or backstory.
 
-Context:
+Style rules:
+- Write like casual Discord: short, direct, conversational
+- Match the tone of the examples (plain, sometimes blunt, sometimes warm)
+- Do not sound polite, formal, or customer-servicey
+- Do not use emojis unless the examples below use them for a similar kind of reply
+- Keep answers brief unless the question needs more detail
+- If the examples do not mention something, say "I don't know" or "no idea" — do not guess
+
+Past messages from spacepiratemog:
 {context}"""),
-    ("human", "{question}")
+    ("human", "{question}"),
 ])
+
+
+def get_retrieved_docs(question: str):
+    vector_store = get_vector_store()
+    retriever = vector_store.as_retriever(
+        search_type="mmr",
+        search_kwargs={"k": TOP_K, "fetch_k": 20},
+    )
+    return retriever.invoke(question)
+
 
 def build_rag_chain():
     """Build the complete RAG chain."""
     vector_store = get_vector_store()
     retriever = vector_store.as_retriever(
         search_type="mmr",
-        search_kwargs={"k": TOP_K, "fetch_k": 20}
+        search_kwargs={"k": TOP_K, "fetch_k": 20},
     )
 
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        temperature=0.1,
-        max_tokens=2048
+    llm = ChatOllama(
+        model=LLM_MODEL,
+        base_url=OLLAMA_BASE_URL,
+        temperature=0.6,
     )
 
-    chain = (
-        {"context": retriever | format_docs,
-         "question": RunnablePassthrough()}
+    return (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
         | RAG_PROMPT
         | llm
         | StrOutputParser()
     )
-    return chain
 
-def main():
+
+def main() -> None:
     """Run the interactive chatbot."""
     console.print("\n[bold green]RAG Chatbot Ready[/bold green]")
     console.print("Type your questions below. Type 'quit' to exit.\n")
@@ -94,10 +111,18 @@ def main():
             console.print("[yellow]Goodbye![/yellow]")
             break
 
-        console.print("\n[bold green]Assistant:[/bold green]")
+        console.print("\n[bold green]Mog:[/bold green]")
+        if SHOW_SOURCES:
+            docs = get_retrieved_docs(question)
+            console.print("[dim]Retrieved messages:[/dim]")
+            for i, doc in enumerate(docs, 1):
+                preview = doc.page_content.strip().replace("\n", " ")[:120]
+                console.print(f"[dim]  {i}. {preview}[/dim]")
+            console.print()
         response = chain.invoke(question)
         console.print(Markdown(response))
         console.print()
+
 
 if __name__ == "__main__":
     main()
