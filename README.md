@@ -16,6 +16,6 @@ Both guides cover Python, Docker, and Ollama setup (including the Docker-based w
 extract the RAG prompt to separate file, and make more customizable by user
 
 - improve discord input
-    -summarize other user messages
-    -include sentiment analysis on other user's messages, per message
-    -remove links and images
+    - summarize other user messages
+    - include sentiment analysis on other user's messages, per message
+    - remove links and images
