@@ -180,6 +180,58 @@ def parse_discord_conversation_pairs(text: str, *, source: str = "") -> List[Doc
     return documents
 
 
+def parse_discord_statements(text: str, *, source: str = "") -> List[Document]:
+    """Index every spacepiratemog message for topic/opinion retrieval."""
+    documents: List[Document] = []
+    for msg in _parse_all_messages(text):
+        if not _is_target_author(msg.author):
+            continue
+        if is_low_signal_content(msg.content):
+            continue
+        documents.append(
+            Document(
+                page_content=msg.content,
+                metadata={
+                    "source": source,
+                    "author": msg.author,
+                    "timestamp": msg.timestamp,
+                    "type": "discord_statement",
+                },
+            )
+        )
+    return documents
+
+
+def load_discord_statements(
+    directory: Path,
+    *,
+    extensions: Iterable[str] = (".txt",),
+) -> List[Document]:
+    """Load spacepiratemog statements for topic retrieval."""
+    if not directory.is_dir():
+        return []
+
+    documents: List[Document] = []
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in extensions:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        documents.extend(parse_discord_statements(text, source=str(path)))
+
+    return documents
+
+
+def load_discord_documents(
+    directory: Path,
+    *,
+    extensions: Iterable[str] = (".txt",),
+) -> List[Document]:
+    """Load conversation pairs and statements for dual-index RAG."""
+    return load_discord_pairs(directory, extensions=extensions) + load_discord_statements(
+        directory, extensions=extensions
+    )
+
+
 def load_discord_pairs(
     directory: Path,
     *,

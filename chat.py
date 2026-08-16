@@ -11,6 +11,8 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 from rich.console import Console
 from rich.markdown import Markdown
 
+from chroma_client import chroma_client_settings
+
 load_dotenv()
 
 CHROMA_DIR = "data/chroma"
@@ -19,6 +21,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b")
 TOP_K = int(os.getenv("TOP_K", "3"))
+STATEMENT_K = int(os.getenv("STATEMENT_K", "3"))
 FETCH_K = int(os.getenv("FETCH_K", "12"))
 MAX_DISTANCE = float(os.getenv("MAX_DISTANCE", "0.88"))
 MAX_REPLY_TOKENS = int(os.getenv("MAX_REPLY_TOKENS", "80"))
@@ -42,6 +45,7 @@ def get_vector_store() -> Chroma:
         collection_name=COLLECTION_NAME,
         persist_directory=CHROMA_DIR,
         embedding_function=embeddings,
+        client_settings=chroma_client_settings(),
     )
 
 
@@ -54,7 +58,7 @@ def get_llm() -> ChatOllama:
     )
 
 
-def format_docs(docs) -> str:
+def format_pair_context(docs) -> str:
     seen = set()
     formatted = []
     for doc in docs:
@@ -72,6 +76,43 @@ def format_docs(docs) -> str:
     return "\n\n---\n\n".join(formatted)
 
 
+def format_statement_context(docs) -> str:
+    seen = set()
+    formatted = []
+    for doc in docs:
+        text = doc.page_content.strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        formatted.append(f"spacepiratemog said:\n{text}")
+    return "\n\n---\n\n".join(formatted)
+
+
+def format_context(pairs, statements) -> str:
+    sections = []
+    pair_text = format_pair_context(pairs)
+    statement_text = format_statement_context(statements)
+    if pair_text:
+        sections.append(
+            "Reply examples (how spacepiratemog responds to similar messages):\n"
+            + pair_text
+        )
+    if statement_text:
+        sections.append(
+            "Topic examples (things spacepiratemog has said):\n" + statement_text
+        )
+    return "\n\n===\n\n".join(sections)
+
+
+# Backward compatibility for eval_rag.py
+def format_docs(docs) -> str:
+    pairs = [d for d in docs if d.metadata.get("type") == "discord_pair"]
+    statements = [d for d in docs if d.metadata.get("type") == "discord_statement"]
+    if not pairs and not statements and docs:
+        pairs = docs
+    return format_context(pairs, statements)
+
+
 PROMPT_WITH_CONTEXT = ChatPromptTemplate.from_messages([
     ("system", """You are spacepiratemog replying in Discord. Write ONLY the next message.
 
@@ -80,13 +121,12 @@ You are NOT an assistant. Do not help, advise, teach, list steps, or explain thi
 Hard rules:
 - 1-3 sentences max, usually shorter
 - Plain text only: no markdown, no headers, no bullet lists, no numbered lists
-- Match the casual tone and length of spacepiratemog's replies in the examples
-- Ignore unrelated details in the examples — copy vibe, not content
-- Do not mention topics from the examples unless the user brought them up
-- No emojis unless the examples use them for a similar reply
-- Do not invent facts
+- Use reply examples for tone and how to respond; use topic examples for what spacepiratemog has said about a subject
+- Ignore unrelated details in the examples
+- No emojis unless similar examples use them
+- Do not invent facts beyond the topic examples
+- Never invent dice rolls or game mechanics
 
-Examples of how spacepiratemog replies to similar messages:
 {context}"""),
     ("human", "{question}"),
 ])
@@ -119,16 +159,29 @@ def sanitize_response(text: str) -> str:
     return text.strip()
 
 
-def get_retrieved_docs(question: str):
-    vector_store = get_vector_store()
-    scored = vector_store.similarity_search_with_score(question, k=FETCH_K)
+def _search_by_type(vector_store, question: str, doc_type: str, limit: int):
+    scored = vector_store.similarity_search_with_score(
+        question,
+        k=FETCH_K,
+        filter={"type": doc_type},
+    )
     filtered = [doc for doc, distance in scored if distance <= MAX_DISTANCE]
-    return filtered[:TOP_K]
+    return filtered[:limit]
+
+
+def get_retrieved_docs(question: str) -> dict:
+    vector_store = get_vector_store()
+    return {
+        "pairs": _search_by_type(vector_store, question, "discord_pair", TOP_K),
+        "statements": _search_by_type(
+            vector_store, question, "discord_statement", STATEMENT_K
+        ),
+    }
 
 
 def generate_reply(question: str) -> str:
-    docs = get_retrieved_docs(question)
-    context = format_docs(docs)
+    retrieved = get_retrieved_docs(question)
+    context = format_context(retrieved["pairs"], retrieved["statements"])
     llm = get_llm()
     if context:
         chain = PROMPT_WITH_CONTEXT | llm | StrOutputParser()
@@ -172,16 +225,25 @@ def main() -> None:
 
         console.print("\n[bold green]Mog:[/bold green]")
         if SHOW_SOURCES:
-            docs = get_retrieved_docs(question)
-            if docs:
+            retrieved = get_retrieved_docs(question)
+            pairs = retrieved["pairs"]
+            statements = retrieved["statements"]
+            if pairs:
                 console.print("[dim]Retrieved pairs:[/dim]")
-                for i, doc in enumerate(docs, 1):
+                for i, doc in enumerate(pairs, 1):
                     incoming = doc.page_content.strip().replace("\n", " ")[:80]
                     reply = doc.metadata.get("reply", "").replace("\n", " ")[:80]
                     console.print(f"[dim]  {i}. They: {incoming}[/dim]")
                     console.print(f"[dim]     Mog: {reply}[/dim]")
-            else:
-                console.print("[dim]No pairs passed similarity threshold — using short fallback.[/dim]")
+            if statements:
+                console.print("[dim]Retrieved statements:[/dim]")
+                for i, doc in enumerate(statements, 1):
+                    text = doc.page_content.strip().replace("\n", " ")[:120]
+                    console.print(f"[dim]  {i}. {text}[/dim]")
+            if not pairs and not statements:
+                console.print(
+                    "[dim]No results passed similarity threshold — using short fallback.[/dim]"
+                )
             console.print()
 
         response = generate_reply(question)

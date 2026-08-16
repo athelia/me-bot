@@ -1,12 +1,11 @@
 """Run fixed prompts through retrieval and optionally the full RAG chain."""
 
 import argparse
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-from chat import build_rag_chain, format_docs, get_retrieved_docs
+from chat import build_rag_chain, format_context, get_retrieved_docs
 
 load_dotenv()
 
@@ -15,7 +14,7 @@ DEFAULT_PROMPTS = [
     "who are you?",
     "want to watch something?",
     "who is Lily?",
-    "who is Tess?",
+    "what do you think about Loki?",
     "Hello, how are you?",
     "Are you going to the party tomorrow?",
     "Brainweasel check in: we're good right?",
@@ -33,18 +32,29 @@ def run_eval(prompts: list[str], *, generate: bool = False) -> str:
         sections.append(f"## Prompt: {prompt}")
         sections.append("")
 
-        docs = get_retrieved_docs(prompt)
+        retrieved = get_retrieved_docs(prompt)
+        pairs = retrieved["pairs"]
+        statements = retrieved["statements"]
+
         sections.append("### Retrieved pairs")
-        if not docs:
+        if not pairs:
             sections.append("(none)")
-        for i, doc in enumerate(docs, 1):
+        for i, doc in enumerate(pairs, 1):
             sections.append(f"{i}. When someone said:")
             sections.append(doc.page_content)
             sections.append(f"   spacepiratemog replied: {doc.metadata.get('reply', '')}")
             sections.append("")
 
+        sections.append("### Retrieved statements")
+        if not statements:
+            sections.append("(none)")
+        for i, doc in enumerate(statements, 1):
+            sections.append(f"{i}. spacepiratemog said:")
+            sections.append(doc.page_content)
+            sections.append("")
+
         sections.append("### Formatted context")
-        sections.append(format_docs(docs) or "(empty)")
+        sections.append(format_context(pairs, statements) or "(empty)")
         sections.append("")
 
         if chain:
