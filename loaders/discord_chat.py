@@ -249,33 +249,3 @@ def load_discord_pairs(
         documents.extend(parse_discord_conversation_pairs(text, source=str(path)))
 
     return documents
-
-
-def load_discord_chats(
-    directory: Path,
-    *,
-    extensions: Iterable[str] = (".txt",),
-) -> List[Document]:
-    """Load solo TARGET_AUTHOR messages (legacy preview). Prefer load_discord_pairs for RAG."""
-    if not directory.is_dir():
-        return []
-
-    documents: List[Document] = []
-    for path in sorted(directory.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in extensions:
-            continue
-        for msg in _parse_all_messages(path.read_text(encoding="utf-8", errors="replace")):
-            if _is_target_author(msg.author) and not is_low_signal_content(msg.content):
-                documents.append(
-                    Document(
-                        page_content=msg.content,
-                        metadata={
-                            "source": str(path),
-                            "author": msg.author,
-                            "timestamp": msg.timestamp,
-                            "type": "discord_message",
-                        },
-                    )
-                )
-
-    return documents
