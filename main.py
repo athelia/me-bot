@@ -27,11 +27,8 @@ EMBED_BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "32"))
 def load_documents() -> List[Document]:
     documents: List[Document] = []
 
-    if PDF_PATH.is_file():
-        documents.extend(PyPDFLoader(str(PDF_PATH)).load())
-        print(f"Loaded PDF pages from {PDF_PATH}")
-
     discord_documents = load_discord_documents(DISCORD_DIR)
+    
     if discord_documents:
         pairs = sum(1 for d in discord_documents if d.metadata.get("type") == "discord_pair")
         statements = sum(

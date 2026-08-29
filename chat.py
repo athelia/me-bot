@@ -53,7 +53,7 @@ def get_llm() -> ChatOllama:
     return ChatOllama(
         model=LLM_MODEL,
         base_url=OLLAMA_BASE_URL,
-        temperature=0.35,
+        temperature=0.75,
         num_predict=MAX_REPLY_TOKENS,
     )
 
@@ -125,7 +125,6 @@ Hard rules:
 - Ignore unrelated details in the examples
 - No emojis unless similar examples use them
 - Do not invent facts beyond the topic examples
-- Never invent dice rolls or game mechanics
 
 {context}"""),
     ("human", "{question}"),
@@ -189,7 +188,8 @@ def generate_reply(question: str) -> str:
     else:
         chain = PROMPT_NO_CONTEXT | llm | StrOutputParser()
         raw = chain.invoke({"question": question})
-    return sanitize_response(raw)
+    #return sanitize_response(raw)
+    return raw
 
 
 def append_chat_log(user_message: str, bot_response: str) -> None:
