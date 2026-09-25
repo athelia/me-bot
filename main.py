@@ -11,17 +11,10 @@ from langchain_core.documents import Document
 
 from loaders.discord_chat import load_discord_documents
 from chroma_client import chroma_client_settings
+from settings import DISCORD_DIR, CHROMA_DIR, COLLECTION_NAME, OLLAMA_BASE_URL, EMBED_MODEL, EMBED_BATCH_SIZE
 
 load_dotenv()
 
-PDF_PATH = Path("data/sample_data.pdf")
-DISCORD_DIR = Path("data/discord")
-CHROMA_DIR = Path("data/chroma")
-COLLECTION_NAME = "me-bot"
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b")
-EMBED_BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "32"))
 
 
 def load_documents() -> List[Document]:
@@ -54,7 +47,7 @@ def create_embeddings() -> OllamaEmbeddings:
 
 def create_vector_store(documents: List[Document]) -> Chroma:
     """Create embeddings and store them in ChromaDB."""
-    if CHROMA_DIR.exists():
+    if Path(CHROMA_DIR).exists():
         shutil.rmtree(CHROMA_DIR)
 
     embeddings = create_embeddings()
@@ -64,7 +57,7 @@ def create_vector_store(documents: List[Document]) -> Chroma:
     vector_store = Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=embeddings,
-        persist_directory=str(CHROMA_DIR),
+        persist_directory=CHROMA_DIR,
         client_settings=chroma_client_settings(),
     )
 

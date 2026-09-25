@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from loaders.discord_chat import load_discord_pairs
+from settings import PERSONA, DISCORD_DIR
 
-DISCORD_DIR = Path("data/discord")
 OUTPUT_PATH = Path("output/discord_pairs_sample.txt")
 SAMPLE_COUNT = 10
 
@@ -16,7 +16,7 @@ def format_pair(index: int, total: int, doc) -> str:
         "When someone said:",
         doc.page_content,
         "",
-        "spacepiratemog replied:",
+        f"{PERSONA['displayname']} replied:",
         doc.metadata.get("reply", ""),
         "",
     ]
@@ -39,7 +39,7 @@ def build_preview(documents, sample_count: int = SAMPLE_COUNT) -> str:
 
     sections = [
         "Discord conversation pair preview",
-        "Target author: spacepiratemog",
+        f"Target author: {PERSONA['screenname']}",
         f"Total pairs: {total}",
         header,
         "=" * 60,

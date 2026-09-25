@@ -6,7 +6,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from chat import build_rag_chain, format_context, get_retrieved_docs
-
+from settings import PERSONA
+    
 load_dotenv()
 
 DEFAULT_PROMPTS = [
@@ -42,14 +43,14 @@ def run_eval(prompts: list[str], *, generate: bool = False) -> str:
         for i, doc in enumerate(pairs, 1):
             sections.append(f"{i}. When someone said:")
             sections.append(doc.page_content)
-            sections.append(f"   spacepiratemog replied: {doc.metadata.get('reply', '')}")
+            sections.append(f"   {PERSONA['displayname']} replied: {doc.metadata.get('reply', '')}")
             sections.append("")
 
         sections.append("### Retrieved statements")
         if not statements:
             sections.append("(none)")
         for i, doc in enumerate(statements, 1):
-            sections.append(f"{i}. spacepiratemog said:")
+            sections.append(f"{i}. {PERSONA['displayname']} said:")
             sections.append(doc.page_content)
             sections.append("")
 

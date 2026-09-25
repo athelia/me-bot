@@ -1,8 +1,9 @@
 from pathlib import Path
 
-from loaders.discord_chat import load_discord_chats
+from loaders.discord_chat import load_discord_documents
+from settings import PERSONA, DISCORD_DIR
 
-DISCORD_DIR = Path("data/discord")
+
 OUTPUT_PATH = Path("output/discord_sample.txt")
 SAMPLE_COUNT = 10
 
@@ -35,7 +36,7 @@ def build_preview(documents, sample_count: int = SAMPLE_COUNT) -> str:
 
     sections = [
         "Discord sample preview",
-        f"Target author: spacepiratemog",
+        f"Target author: {PERSONA['screenname']}",
         f"Total messages: {total}",
         header,
         "=" * 60,
@@ -51,7 +52,7 @@ def build_preview(documents, sample_count: int = SAMPLE_COUNT) -> str:
 
 
 def main() -> None:
-    documents = load_discord_chats(DISCORD_DIR)
+    documents = load_discord_documents(DISCORD_DIR)
     preview = build_preview(documents)
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

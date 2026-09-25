@@ -2,10 +2,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
-
 from langchain_core.documents import Document
+from settings import PERSONA
 
-TARGET_AUTHOR = "spacepiratemog"
+TARGET_AUTHOR = PERSONA["screenname"]
 MIN_REPLY_CHARS = 3
 
 _URL_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)

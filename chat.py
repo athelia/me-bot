@@ -12,21 +12,9 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from chroma_client import chroma_client_settings
+from settings import EMBED_MODEL, OLLAMA_BASE_URL, COLLECTION_NAME, CHROMA_DIR, LLM_MODEL, MAX_REPLY_TOKENS, TOP_K, STATEMENT_K, FETCH_K, MAX_DISTANCE, SHOW_SOURCES, LOG_PATH, PERSONA
 
 load_dotenv()
-
-CHROMA_DIR = "data/chroma"
-COLLECTION_NAME = "me-bot"
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b")
-TOP_K = int(os.getenv("TOP_K", "3"))
-STATEMENT_K = int(os.getenv("STATEMENT_K", "3"))
-FETCH_K = int(os.getenv("FETCH_K", "12"))
-MAX_DISTANCE = float(os.getenv("MAX_DISTANCE", "0.88"))
-MAX_REPLY_TOKENS = int(os.getenv("MAX_REPLY_TOKENS", "80"))
-SHOW_SOURCES = os.getenv("SHOW_SOURCES", "").lower() in {"1", "true", "yes"}
-LOG_PATH = Path(os.getenv("CHAT_LOG_PATH", "output/logs.txt"))
 
 console = Console()
 
@@ -71,7 +59,7 @@ def format_pair_context(docs) -> str:
             continue
         seen.add(key)
         formatted.append(
-            f"They said:\n{incoming}\n\nspacepiratemog replied:\n{reply}"
+            f"They said:\n{incoming}\n\n{PERSONA['displayname']} replied:\n{reply}"
         )
     return "\n\n---\n\n".join(formatted)
 
@@ -84,7 +72,7 @@ def format_statement_context(docs) -> str:
         if not text or text in seen:
             continue
         seen.add(text)
-        formatted.append(f"spacepiratemog said:\n{text}")
+        formatted.append(f"{PERSONA['displayname']} said:\n{text}")
     return "\n\n---\n\n".join(formatted)
 
 
@@ -94,12 +82,12 @@ def format_context(pairs, statements) -> str:
     statement_text = format_statement_context(statements)
     if pair_text:
         sections.append(
-            "Reply examples (how spacepiratemog responds to similar messages):\n"
+            f"Reply examples (how {PERSONA['displayname']} responds to similar messages):\n"
             + pair_text
         )
     if statement_text:
         sections.append(
-            "Topic examples (things spacepiratemog has said):\n" + statement_text
+            f"Topic examples (things {PERSONA['displayname']} has said):\n" + statement_text
         )
     return "\n\n===\n\n".join(sections)
 
@@ -114,24 +102,24 @@ def format_docs(docs) -> str:
 
 
 PROMPT_WITH_CONTEXT = ChatPromptTemplate.from_messages([
-    ("system", """You are spacepiratemog replying in Discord. Write ONLY the next message.
+    ("system", f"""You are {PERSONA["displayname"]} replying in Discord. Write ONLY the next message.
 
 You are NOT an assistant. Do not help, advise, teach, list steps, or explain things unless the examples do.
 
 Hard rules:
 - 1-3 sentences max, usually shorter
 - Plain text only: no markdown, no headers, no bullet lists, no numbered lists
-- Use reply examples for tone and how to respond; use topic examples for what spacepiratemog has said about a subject
+- Use reply examples for tone and how to respond; use topic examples for what {PERSONA['displayname']} has said about a subject
 - Ignore unrelated details in the examples
 - No emojis unless similar examples use them
-- Do not invent facts beyond the topic examples
+- Do not invent facts beyond the topic examples"""+"""
 
 {context}"""),
     ("human", "{question}"),
 ])
 
 PROMPT_NO_CONTEXT = ChatPromptTemplate.from_messages([
-    ("system", """You are spacepiratemog in Discord. Write ONE short casual reply (1-2 sentences).
+    ("system", f"""You are {PERSONA["displayname"]} in Discord. Write ONE short casual reply (1-2 sentences).
 
 You don't know enough to answer. Do not guess, advise, or be helpful like an AI.
 No markdown. No lists. No emojis unless very natural.
@@ -199,7 +187,7 @@ def append_chat_log(user_message: str, bot_response: str) -> None:
     entry = (
         f"[{timestamp}]\n"
         f"You: {user_message}\n"
-        f"Mog: {bot_response}\n"
+        f"{PERSONA['displayname']}: {bot_response}\n"
         f"{'-' * 60}\n"
     )
     with LOG_PATH.open("a", encoding="utf-8") as f:
@@ -223,7 +211,7 @@ def main() -> None:
             console.print("[yellow]Goodbye![/yellow]")
             break
 
-        console.print("\n[bold green]Mog:[/bold green]")
+        console.print(f"\n[bold green]{PERSONA['displayname']}:[/bold green]")
         if SHOW_SOURCES:
             retrieved = get_retrieved_docs(question)
             pairs = retrieved["pairs"]
@@ -234,7 +222,7 @@ def main() -> None:
                     incoming = doc.page_content.strip().replace("\n", " ")[:80]
                     reply = doc.metadata.get("reply", "").replace("\n", " ")[:80]
                     console.print(f"[dim]  {i}. They: {incoming}[/dim]")
-                    console.print(f"[dim]     Mog: {reply}[/dim]")
+                    console.print(f"[dim]     {PERSONA['displayname']}: {reply}[/dim]")
             if statements:
                 console.print("[dim]Retrieved statements:[/dim]")
                 for i, doc in enumerate(statements, 1):
